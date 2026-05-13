@@ -834,6 +834,22 @@ func resolveStreamURL(
 		strings.EqualFold(providerName, "streamsrc") || strings.EqualFold(providerName, "internetarchive") ||
 		strings.EqualFold(providerName, "cineby") {
 		streamURL = link
+		if idx := strings.Index(streamURL, "|subs="); idx != -1 {
+			subsStr := streamURL[idx+6:]
+			streamURL = streamURL[:idx]
+			if decoded, decodeErr := url.QueryUnescape(subsStr); decodeErr == nil {
+				subsStr = decoded
+			}
+			sep := ","
+			if strings.Contains(subsStr, "\n") {
+				sep = "\n"
+			}
+			for _, sub := range strings.Split(subsStr, sep) {
+				if sub = strings.TrimSpace(sub); sub != "" {
+					subtitles = append(subtitles, sub)
+				}
+			}
+		}
 	} else {
 		if debugMode {
 			fmt.Println("Decrypting stream...")
@@ -875,7 +891,20 @@ func resolveStreamURL(
 			if debugMode {
 				fmt.Printf("Failed to parse m3u8: %v\n", qErr)
 			}
-		} else if len(qualities) > 0 {
+		} else {
+			hlsSubtitles, subErr := core.GetSubtitles(streamURL, ctx.Client, referer)
+			if subErr != nil {
+				if debugMode {
+					fmt.Printf("Failed to parse m3u8 subtitles: %v\n", subErr)
+				}
+			} else if len(hlsSubtitles) > 0 {
+				subtitles = appendUniqueStrings(subtitles, hlsSubtitles...)
+				if debugMode {
+					fmt.Printf("Found %d HLS subtitle tracks\n", len(hlsSubtitles))
+				}
+			}
+		}
+		if qErr == nil && len(qualities) > 0 {
 			if debugMode {
 				fmt.Printf("Found %d quality variants\n", len(qualities))
 			}
@@ -893,6 +922,21 @@ func resolveStreamURL(
 		}
 	}
 	return
+}
+
+func appendUniqueStrings(values []string, candidates ...string) []string {
+	seen := make(map[string]bool, len(values)+len(candidates))
+	for _, value := range values {
+		seen[value] = true
+	}
+	for _, candidate := range candidates {
+		candidate = strings.TrimSpace(candidate)
+		if candidate != "" && !seen[candidate] {
+			seen[candidate] = true
+			values = append(values, candidate)
+		}
+	}
+	return values
 }
 
 // getLinkForEpisode resolves the raw provider link for a given episodeWithNum.
