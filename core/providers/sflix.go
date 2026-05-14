@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
@@ -110,6 +111,20 @@ func (s *Sflix) GetMediaID(url string) (string, error) {
 	}
 	if id == "" {
 		id = doc.Find("#movie_id").AttrOr("value", "")
+	}
+	if id == "" {
+		id = doc.Find("div.watch-page").AttrOr("data-id", "")
+	}
+	if id == "" {
+		id = doc.Find(".btn-watch").AttrOr("data-id", "")
+	}
+	if id == "" {
+		// Try to extract from URL if possible as last resort
+		re := regexp.MustCompile(`-([0-9]+)$`)
+		matches := re.FindStringSubmatch(url)
+		if len(matches) > 1 {
+			id = matches[1]
+		}
 	}
 
 	if id == "" {
