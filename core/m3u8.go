@@ -18,6 +18,8 @@ type Quality struct {
 }
 
 func GetQualities(m3u8URL string, client *http.Client, referer string) ([]Quality, string, error) {
+	m3u8URL = sanitizeMediaURL(m3u8URL)
+
 	req, err := http.NewRequest("GET", m3u8URL, nil)
 	if err != nil {
 		return nil, "", err
@@ -88,6 +90,7 @@ func GetQualities(m3u8URL string, client *http.Client, referer string) ([]Qualit
 
 		if isVariant && line != "" {
 			isVariant = false
+			line = sanitizeMediaURL(line)
 
 			label := currentResolution
 			if label == "" {
@@ -114,7 +117,7 @@ func GetQualities(m3u8URL string, client *http.Client, referer string) ([]Qualit
 		return qualities, "", nil
 	}
 
-	return nil, m3u8URL, nil
+	return nil, sanitizeMediaURL(m3u8URL), nil
 }
 
 func GetSubtitles(m3u8URL string, client *http.Client, referer string) ([]string, error) {
@@ -258,7 +261,7 @@ func SelectQuality(qualities []Quality, selectBest bool) (string, error) {
 
 	if selectBest || len(qualities) == 1 {
 		best := GetBestQuality(qualities)
-		return best.URL, nil
+		return sanitizeMediaURL(best.URL), nil
 	}
 
 	var labels []string
@@ -267,5 +270,14 @@ func SelectQuality(qualities []Quality, selectBest bool) (string, error) {
 	}
 
 	idx := Select("Quality:", labels)
-	return qualities[idx].URL, nil
+	return sanitizeMediaURL(qualities[idx].URL), nil
+}
+
+func sanitizeMediaURL(raw string) string {
+	cleaned := strings.TrimSpace(raw)
+	cleaned = strings.Trim(cleaned, `"'`)
+	cleaned = strings.TrimSuffix(cleaned, ",")
+	cleaned = strings.Trim(cleaned, `"'`)
+	cleaned = strings.ReplaceAll(cleaned, `\"`, "")
+	return cleaned
 }

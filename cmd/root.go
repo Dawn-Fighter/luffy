@@ -28,6 +28,7 @@ var (
 	bestFlag      bool
 	historyFlag   bool
 	recommendFlag bool
+	browserFlag   bool
 )
 
 // episodeWithNum pairs an episode with its 1-based number within the season.
@@ -65,6 +66,7 @@ func init() {
 	rootCmd.Flags().BoolVarP(&bestFlag, "best", "b", false, "Auto-select best quality")
 	rootCmd.Flags().BoolVarP(&historyFlag, "history", "H", false, "Pick from watch history and resume")
 	rootCmd.Flags().BoolVarP(&recommendFlag, "recommend", "r", false, "Show recommendations based on watch history")
+	rootCmd.Flags().BoolVarP(&browserFlag, "watch-in-browser", "w", false, "Open embed URL in browser")
 
 	rootCmd.AddCommand(previewCmd)
 	previewCmd.Flags().StringVar(&backendFlag, "backend", "sixel", "Image backend")
@@ -93,26 +95,15 @@ var rootCmd = &cobra.Command{
 		}
 
 		var provider core.Provider
-		if strings.EqualFold(providerName, "sflix") {
-			provider = providers.NewSflix(client)
-		} else if strings.EqualFold(providerName, "hdrezka") {
-			provider = providers.NewHDRezka(client)
-		} else if strings.EqualFold(providerName, "braflix") {
-			provider = providers.NewBraflix(client)
-		} else if strings.EqualFold(providerName, "movies4u") {
-			provider = providers.NewMovies4u(client)
-		} else if strings.EqualFold(providerName, "youtube") {
-			provider = providers.NewYouTube(client)
-		} else if strings.EqualFold(providerName, "anime") || strings.EqualFold(providerName, "allanime") {
+		if strings.EqualFold(providerName, "anime") || strings.EqualFold(providerName, "allanime") {
 			provider = providers.NewAnime(client)
 		} else if strings.EqualFold(providerName, "anime-dub") || strings.EqualFold(providerName, "allanime-dub") {
 			provider = providers.NewAnimeDub(client)
-		} else if strings.EqualFold(providerName, "cinebolt") {
-			provider = providers.NewCinebolt(client)
 		} else if strings.EqualFold(providerName, "cineby") || strings.EqualFold(providerName, "vidking") {
 			provider = providers.NewCineby(client)
 		} else {
-			provider = providers.NewFlixHQ(client)
+			providerName = "cineby"
+			provider = providers.NewCineby(client)
 		}
 
 		// Open history DB once; non-fatal if it fails.
@@ -152,26 +143,15 @@ var rootCmd = &cobra.Command{
 			}
 			var histProvider core.Provider
 			switch strings.ToLower(histProviderName) {
-			case "sflix":
-				histProvider = providers.NewSflix(client)
-			case "hdrezka":
-				histProvider = providers.NewHDRezka(client)
-			case "braflix":
-				histProvider = providers.NewBraflix(client)
-			case "movies4u":
-				histProvider = providers.NewMovies4u(client)
-			case "youtube":
-				histProvider = providers.NewYouTube(client)
 			case "anime", "allanime":
 				histProvider = providers.NewAnime(client)
 			case "anime-dub", "allanime-dub":
 				histProvider = providers.NewAnimeDub(client)
-			case "cinebolt":
-				histProvider = providers.NewCinebolt(client)
 			case "cineby", "vidking":
 				histProvider = providers.NewCineby(client)
 			default:
-				histProvider = providers.NewFlixHQ(client)
+				histProviderName = "cineby"
+				histProvider = providers.NewCineby(client)
 			}
 
 			ctx.Title = chosen.Title
@@ -830,9 +810,6 @@ func resolveStreamURL(
 	if isAnimeProvider(providerName) {
 		referer = "https://allmanga.to"
 	}
-	if strings.EqualFold(providerName, "cinebolt") {
-		referer = ctx.URL
-	}
 	if strings.EqualFold(providerName, "cineby") || strings.EqualFold(providerName, "vidking") {
 		referer = "https://www.vidking.net/"
 	}
@@ -862,9 +839,7 @@ func resolveStreamURL(
 		if streamURL == "" {
 			streamURL = link
 		}
-	} else if strings.EqualFold(providerName, "movies4u") || strings.EqualFold(providerName, "youtube") || isAnimeProvider(providerName) ||
-		strings.EqualFold(providerName, "cinebolt") || strings.EqualFold(providerName, "cineby") ||
-		strings.EqualFold(providerName, "vidking") {
+	} else if isAnimeProvider(providerName) || strings.EqualFold(providerName, "cineby") || strings.EqualFold(providerName, "vidking") {
 		streamURL = link
 		if idx := strings.Index(streamURL, "|referer="); idx != -1 {
 			refererStr := streamURL[idx+9:]
@@ -904,7 +879,14 @@ func resolveStreamURL(
 		streamURL, subtitles, decryptedReferer, err = core.DecryptStream(link, ctx.Client)
 		if err != nil {
 			fmt.Printf("Decryption failed for %s: %v\n", name, err)
-			return
+			if browserFlag || strings.Contains(err.Error(), "Cloudflare") || strings.Contains(err.Error(), "turnstile") {
+				fmt.Println("Opening embed URL in your default browser...")
+				fmt.Println("Watch the video there, then press Ctrl+C to exit.")
+				openURL(link)
+				return streamURL, referer, subtitles, nil
+			} else {
+				return
+			}
 		}
 		if decryptedReferer != "" {
 			referer = decryptedReferer
@@ -1057,6 +1039,7 @@ func buildProcessStream(
 		case "play":
 			if debugMode {
 				fmt.Printf("Stream URL: %s\n", streamURL)
+				fmt.Printf("Referer: %s\n", referer)
 			}
 			lastPos := getLastPosition(histDB, ctx.Title, season, episode)
 			posSecs, playErr := core.Play(streamURL, name, referer, USER_AGENT, subtitles, debugMode, lastPos, core.HookContext{
@@ -1069,6 +1052,17 @@ func buildProcessStream(
 			})
 			if playErr != nil {
 				fmt.Println("Error playing:", playErr)
+				if bestFlag && browserFlag {
+					fmt.Println("Trying Cineby in browser...")
+					vidsrcURL, verr := getCinebyURL(ctx.Title, season > 0, ctx.Client, debugMode)
+					if verr != nil {
+						fmt.Println("Failed to get Cineby URL:", verr)
+						return playErr
+					}
+					fmt.Printf("Opening: %s\n", vidsrcURL)
+					openURL(vidsrcURL)
+					return nil
+				}
 				return playErr
 			}
 			saveHistory(histDB, ctx, providerName, season, episode, epName, posSecs, debugMode)

@@ -39,16 +39,24 @@
 ## Overview
 
 - [Installation](#installation)
-    - [Arch Linux](#1-arch-linux)
-    - [MacOS](#2-macos)
-    - [Windows](#3-windows)
-    - [Go Install](#4-go-install)
-    - [Build from Source](#5-build-from-source)
-    - [Android Installation](#6-android-installation)
+  - [Arch Linux](#1-arch-linux)
+  - [NixOS / Nix / MacOS](#2-nixos--nix--macos)
+  - [Debian-based or Ubuntu-based](#2-debian-based-or-ubuntu-based)
+  - [Fedora](#3-fedora)
+  - [MacOS](#5-macos)
+  - [Windows](#6-windows)
+  - [Go Install](#7-go-install)
+  - [Build from Source](#8-build-from-source)
+  - [Android Installation](#9-android-installation)
 - [Dependencies](#dependencies)
 - [Usage](#usage)
+  - [Flags](#flags)
+  - [Playback Controls](#playback-controls)
+  - [Examples](#examples)
 - [Configuration](#configuration)
 - [Hooks & MpvArgs](#hooks--mpvargs)
+  - [MpvArgs](#mpvargs)
+  - [Hooks](#hooks)
 - [Providers](#providers)
 
  > [!NOTE] 
@@ -62,8 +70,53 @@
 paru -S luffy-bin
 ```
 
+### 2. NixOS / Nix / MacOS
 
-### 2. MacOS
+#### Run without installing
+```bash
+nix run github:DemonKingSwarn/luffy
+```
+
+#### Install into profile
+```bash
+nix profile install github:DemonKingSwarn/luffy
+```
+
+#### NixOS flake input
+```nix
+inputs.luffy.url = "github:DemonKingSwarn/luffy";
+
+environment.systemPackages = [ inputs.luffy.packages.${system}.luffy ];
+```
+
+### 3. Debian-based or Ubuntu-based
+
+```sh
+curl -fsSL https://demonkingswarn.is-a.dev/debmon-repo/pubkey.gpg | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/debmon-repo.gpg
+
+echo "deb [arch=amd64] https://demonkingswarn.is-a.dev/debmon-repo stable main" | sudo tee /etc/apt/sources.list.d/debmon-repo.list
+
+sudo apt update
+
+sudo apt install -y luffy
+```
+
+### 4. Fedora
+
+```sh
+echo '[fedmon-repo]
+name=fedmon-repo
+baseurl=https://demonkingswarn.is-a.dev/fedmon-repo/rpms
+enabled=1
+gpgcheck=1
+gpgkey=https://demonkingswarn.is-a.dev/fedmon-repo/pubkey.gpg' | sudo tee /etc/yum.repos.d/fedmon-repo.repo
+
+sudo dnf update
+
+sudo dnf install -y luffy
+```
+
+### 5. MacOS
 
 ```sh
 brew tap gamedevCloudy/tools
@@ -71,7 +124,7 @@ brew install --cask iina
 brew install luffy
 ```
 
-### 3. Windows
+### 6. Windows
 
 Make sure you have [scoop.sh](https://scoop.sh) installed on your system.
 
@@ -84,7 +137,7 @@ scoop install luffy
 > [!IMPORTANT]
 > On windows if you want to use the `--show-image`, you need to use the `wezterm` terminal emulator. It is installed as a dependency on windows.
 
-### 4. Go Install
+### 7. Go Install
 
 If you have Go installed, you can easily install Luffy:
 
@@ -92,7 +145,7 @@ If you have Go installed, you can easily install Luffy:
 go install github.com/demonkingswarn/luffy@latest
 ```
 
-### 5. Build from Source
+### 8. Build from Source
 
 1.  Clone the repository:
     ```bash
@@ -106,14 +159,14 @@ go install github.com/demonkingswarn/luffy@latest
     ```
     *Ensure your `$GOPATH/bin` is in your system's `PATH`.*
 
-### 6. Android Installation
+### 9. Android Installation
 
 Install termux [(Guide)](https://termux.com/)
 
 ```sh
 pkg up -y
 pkg in fzf python-yt-dlp
-curl -sL "https://github.com/DemonKingSwarn/luffy/releases/download/v1.1.0/luffy-android-arm64" -o $PREFIX/bin/luffy
+curl -sL "https://github.com/DemonKingSwarn/luffy/releases/download/v1.1.5/luffy-android-arm64" -o $PREFIX/bin/luffy
 chmod +x $PREFIX/bin/luffy
 ```
 
@@ -291,6 +344,8 @@ You can set the default provider in the config file (`~/.config/luffy/config.yam
 | Braflix | `braflix` | |
 | Movies4u | `movies4u` | Bollywood only |
 | YouTube | `youtube` | Streams/downloads via yt-dlp |
+| Allanime | `allanime` | For anime |
+| Cineby | `cineby` | Uses VidKing embeds for playback |
 | HDRezka | `hdrezka` | Experimental — may not always work |
 
 Example config:

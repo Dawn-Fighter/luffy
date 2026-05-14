@@ -4,10 +4,19 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"net/url"
+	"os"
 	"time"
 )
 
 func NewClient() *http.Client {
+	os.Unsetenv("HTTP_PROXY")
+	os.Unsetenv("HTTPS_PROXY")
+	os.Unsetenv("http_proxy")
+	os.Unsetenv("https_proxy")
+	os.Unsetenv("NO_PROXY")
+	os.Unsetenv("no_proxy")
+
 	// Force Cloudflare DNS to bypass ISP DNS poisoning
 	// The pure-Go resolver sometimes reads stale/poisoned system DNS
 	// even when warp-cli is running.
@@ -27,7 +36,9 @@ func NewClient() *http.Client {
 
 	return &http.Client{
 		Transport: &http.Transport{
-			Proxy:                 http.ProxyFromEnvironment,
+			Proxy: func(*http.Request) (*url.URL, error) {
+				return nil, nil
+			},
 			DialContext:           dialer.DialContext,
 			ForceAttemptHTTP2:     true,
 			MaxIdleConns:          100,
@@ -35,6 +46,7 @@ func NewClient() *http.Client {
 			TLSHandshakeTimeout:   10 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,
 		},
+		Timeout: 30 * time.Second,
 	}
 }
 
